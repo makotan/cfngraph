@@ -1,0 +1,9 @@
+install
+http://www.graphviz.org/
+
+command
+mvn exec:java templatename.template
+dot -Tjpg templatename.gv -o templatename.jpg
+
+
+mvn exec:java -Dexec.args="-i path/file.template -pickup name_regex"

@@ -1,0 +1,230 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deep Secutiry Manager template",
+    "Parameters": {
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern": "[-_ a-zA-Z0-9]*",
+            "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
+        },
+        "HostedZone" : {
+            "Description" : "The DNS name of an existing Amazon Route 53 hosted zone",
+            "Type" : "String"
+        },
+        "DSMInstanceImageId" : {
+            "Description" : "The AMI ID for Deep Security Manager Instance made by Packer : ami-XXXXXXXX",
+            "Type" : "String"
+        },
+        "EnvType" : {
+            "Description" : "must specify prod or test. If you specify prod, RDS Oracle DB Instance create and use it.",
+            "Default" : "test",
+            "Type" : "String",
+            "AllowedValues" : ["prod", "test"]
+        },
+        "AdminUsername" : {
+            "Description" : "DSM Administrator username",
+            "Default" : "dsAdmin",
+            "Type" : "String"
+        },
+        "AdminPassword" : {
+            "Description" : "DSM Administrator password",
+            "Type" : "String"
+        },
+        "DBMasterUsername" : {
+            "Description" : "DSM DB master username",
+            "Default" : "dsAdmin",
+            "Type" : "String"
+        },
+        "DBMasterPassword" : {
+            "Description" : "DSM DB master password",
+            "Type" : "String"
+        },
+
+        "VPC" : {
+            "Description" : "VPC ID : vpc-XXXXXXXX",
+            "Type" : "String"
+        },
+        "VPCCIDR" : {
+            "Description" : "VPC CIDR Address : x.x.x.x/x",
+            "Type" : "String"
+        },
+        "VPCDefaultSecurityGroup" : {
+            "Description" : "will apply to DSM Instance : sg-XXXXXXXX",
+            "Type" : "String"
+        },
+        "FrontendSubnet" : {
+            "Description" : "will deploy DSM Instance : subnet-XXXXXXXX",
+            "Type" : "String"
+        },
+        "SSHSecurityGroup" : {
+            "Description" : "will apply to DSM Instance : sg-XXXXXXXX",
+            "Type" : "String"
+        },
+        "DBSubnetGroup" : {
+            "Description" : "will apply to RDS DB instance",
+            "Type" : "String",
+            "ConstraintDescription" : "must specify if you specify prod environment."
+        }
+    },
+    "Mappings": {
+        "StackConfig" : {
+            "DeepSecurityManagerServer" : { "InstanceType" : "m1.medium", "AllocatedStorage" : "20" },
+            "DeepSecurityDBServer"      : { "InstanceType" : "db.t1.micro", "AllocatedStorage" : "20"}
+        }
+    },
+
+    "Conditions" : {
+        "CreateProdResources" : {"Fn::Equals" : [{"Ref" : "EnvType"}, "prod"]}
+    },
+
+    "Resources": {
+        "DeepSecurityManagerSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "VpcId" : {"Ref" : "VPC"},
+                "GroupDescription" : "Deep Security Manager",
+                "SecurityGroupIngress" : [
+                    { "IpProtocol" : "tcp", "FromPort" : "4119", "ToPort" : "4119", "CidrIp" : "0.0.0.0/0" },
+                    { "IpProtocol" : "tcp", "FromPort" : "4120", "ToPort" : "4120", "CidrIp" : { "Ref" : "VPCCIDR" }},
+                    { "IpProtocol" : "tcp", "FromPort" : "4122", "ToPort" : "4122", "CidrIp" : { "Ref" : "VPCCIDR" }}
+                ]
+            }
+        },
+        "DeepSecurityManagerSecurityGroupIngress" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "GroupId" : { "Ref" : "DeepSecurityManagerSecurityGroup" },
+                "IpProtocol" : "tcp", "FromPort" : "4118", "ToPort" : "4118", "CidrIp" : { "Fn::Join" : [ "", [ { "Ref" : "DSMInstanceEIP" }, "/32" ]]}
+            }
+        },
+        "DeepSecurityAgentSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "VpcId" : {"Ref" : "VPC"},
+                "GroupDescription" : "Enable Deep Security Agent access via port 4118 from DSM",
+                "SecurityGroupIngress" : [
+                    { "IpProtocol" : "tcp", "FromPort" : "4118", "ToPort" : "4118", "SourceSecurityGroupId" : { "Ref" : "DeepSecurityManagerSecurityGroup" } }
+                ]
+            }
+        },
+        "OracleSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Condition" : "CreateProdResources",
+            "Properties" : {
+                "VpcId" : {"Ref" : "VPC"},
+                "GroupDescription" : "Enable Oracle access via port 1521 from VPC",
+                "SecurityGroupIngress" : [
+                    { "IpProtocol" : "tcp", "FromPort" : "1521", "ToPort" : "1521", "CidrIp" : { "Ref" : "VPCCIDR" }}
+                ]
+            }
+        },
+
+        "DSMDNSRecord" : {
+            "Type" : "AWS::Route53::RecordSet",
+            "Properties" : {
+                "HostedZoneName" : { "Fn::Join" : [ "", [{"Ref" : "HostedZone"}, "." ]]},
+                "Comment" : "A record for the DSM instance.",
+                "Name" : { "Fn::Join" : [ "", ["ds.", {"Ref" : "HostedZone"}, "." ]]},
+                "Type" : "A",
+                "TTL" : "300",
+                "ResourceRecords" : [
+                    {"Ref" :"DSMInstanceEIP"}
+                ]
+            }
+        },
+        "DSMInstanceEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "InstanceId": { "Ref": "DSMInstance" }
+            }
+        },
+        "DSMInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": { "Fn::FindInMap" : [ "StackConfig", "DeepSecurityManagerServer", "InstanceType" ]},
+                "KeyName":  { "Ref": "KeyName" },
+                "SubnetId": { "Ref" : "FrontendSubnet" },
+                "SourceDestCheck": "false",
+                "ImageId":  { "Ref": "DSMInstanceImageId" },
+                "SecurityGroupIds" : [
+                    { "Ref" : "DeepSecurityManagerSecurityGroup" },
+                    { "Ref" : "SSHSecurityGroup" }
+                ],
+                "BlockDeviceMappings" : [
+                    {
+                        "DeviceName" : "/dev/sda",
+                        "Ebs" : { "VolumeSize" : { "Fn::FindInMap" : [ "StackConfig", "DeepSecurityManagerServer", "AllocatedStorage" ]}}
+                    },
+                    {
+                        "DeviceName" : "/dev/sdb",
+                        "VirtualName" : "ephemeral0"
+                    }
+                ],
+                "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+                    "#!/bin/bash\n",
+                    "mkswap /dev/xvdf\n",
+                    "swapon /dev/xvdf\n",
+                    "echo '/dev/xvdf  swap      swap    defaults         0 0' >> /etc/fstab\n",
+                    "yum install -y wget unzip\n",
+                    "echo 'AddressAndPortsScreen.ManagerAddress=", { "Fn::Join" : [ "", ["ds.", {"Ref" : "HostedZone"}, "." ]]}, "' > dsm.properties\n",
+                    "echo 'CredentialsScreen.Administrator.Username=", { "Ref" : "AdminUsername" }, "' >> dsm.properties\n",
+                    "echo 'CredentialsScreen.Administrator.Password=", { "Ref" : "AdminPassword" }, "' >> dsm.properties\n",
+                    { "Fn::If" : [
+                        "CreateProdResources",
+                        { "Fn::Join" : [ "", [
+                            "echo 'DatabaseScreen.DatabaseType=Oracle' >> dsm.properties\n",
+                            "echo 'DatabaseScreen.Transport=TCP' >> dsm.properties\n",
+                            "echo 'DatabaseScreen.Hostname=", { "Fn::GetAtt" : [ "DSMDBInstance", "Endpoint.Address" ] }, "' >> dsm.properties\n",
+                            "echo 'DatabaseScreen.DatabaseName=ORCL' >> dsm.properties\n",
+                            "echo 'DatabaseScreen.Username=", { "Ref" : "DBMasterUsername" }, "' >> dsm.properties\n",
+                            "echo 'DatabaseScreen.Password=", { "Ref" : "DBMasterPassword" }, "' >> dsm.properties\n"
+                        ]]},
+                        ""
+                    ]},
+                    "curl -OL http://www.trendmicro.com/ftp/jp/ucmodule/tmds/90SP1/DSM/Manager-Linux-9.0.5370.x64.zip\n",
+                    "unzip Manager-Linux-9.0.5370.x64.zip\n",
+                    "bash ./Manager-Linux-9.0.5370.x64.sh -q -console -varfile ./dsm.properties\n",
+                    "rpm -ivh Relay-RedHat_EL6-9.0.0-2008.x86_64.rpm\n"
+                ]]}},
+                "Tags": [
+                    { "Key": "Name", "Value": "DeepSecurityManager" }
+                ]
+            }
+        },
+        "DSMDBInstance" : {
+            "Type" : "AWS::RDS::DBInstance",
+            "Condition" : "CreateProdResources",
+            "DeletionPolicy" : "Snapshot",
+            "Properties" : {
+                "DBInstanceClass" : { "Fn::FindInMap" : [ "StackConfig", "DeepSecurityDBServer", "InstanceType" ]},
+                "AllocatedStorage" : { "Fn::FindInMap" : [ "StackConfig", "DeepSecurityDBServer", "AllocatedStorage" ]},
+                "Engine" : "oracle-se1",
+                "LicenseModel" : "license-included",
+                "MultiAZ" : "true",
+                "MasterUsername" :     { "Ref" : "DBMasterUsername" },
+                "MasterUserPassword" : { "Ref" : "DBMasterPassword" },
+                "BackupRetentionPeriod" : "35",
+                "DBSubnetGroupName" : {"Ref":"DBSubnetGroup"},
+                "PreferredBackupWindow": "19:30-20:00",
+                "PreferredMaintenanceWindow": "sat:00:00-sat:00:30",
+                "VPCSecurityGroups" : [
+                    { "Ref" : "VPCDefaultSecurityGroup" },
+                    { "Ref" : "OracleSecurityGroup" }
+                ]
+            }
+        }
+    },
+
+    "Outputs": {
+        "DeepSecurityManagerURL": {
+            "Value": { "Fn::Join": [ "", [
+                "https://", { "Ref": "DSMDNSRecord" }, ":4119/"
+            ]]},
+            "Description": "-"
+        }
+    }
+}

@@ -1,0 +1,8 @@
+digraph G {
+  node [shape = record];
+  node0 [label = "<f0> node0 | <f1> typename:hogehoge"];
+  node0 -> node1 [label="deppppp"];
+  node0 -> node2 [label="aaaa"];
+  node1 [label = "<f0> node1 | <f1> typename:hogehoge"];
+  node1 -> node2;
+}

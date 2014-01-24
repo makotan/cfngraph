@@ -1,0 +1,468 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters" : {
+        "Vpc" : {
+            "Type" : "String",
+                "Description" : "Vpc ID.",
+                "Default"     : "defaultVpcId",
+                "ConstraintDescription" : "must be a valid VPC ID."
+        },
+        "Igw" : {
+            "Type" : "String",
+                "Description" : "Igw ID.",
+                "Default"     : "defaultIgwId",
+                "ConstraintDescription" : "must be a valid Igw ID."
+        },
+        "InternetSubnet" : {
+            "Type" : "String",
+                "Description" : "Internet Subnet ID.",
+                "Default"     : "defaultIsId",
+                "ConstraintDescription" : "must be a valid InternetSubnet ID."
+        },
+        "NatServer" : {
+            "Type" : "String",
+            "Description" : "NatServer ID.",
+            "Default"     : "defaultNatId",
+            "ConstraintDescription" : "must be a valid NatServer ID."
+        },
+        "NetworkACL" : {
+            "Type" : "String",
+                "Description" : "NetworkACL ID.",
+                "Default"     : "",
+                "ConstraintDescription" : "must be a valid NetworkACL ID."
+        },
+        "AccessKey": {
+          "Default": "",
+          "NoEcho": "true",
+          "Description" : "AWS accessKey",
+          "Type": "String"
+        },
+        "SecretKey": {
+          "Default": "",
+          "NoEcho": "true",
+          "Description" : "AWS secretKey",
+          "Type": "String"
+        },
+	    "KeyName": {
+	      "Default": "",
+	      "NoEcho": "true",
+	      "Description" : "ssh key name",
+	      "Type": "String"
+	    },
+        "ImageId" : {
+            "Type" : "String",
+                "Description" : "input the AMI ID.",
+                "Default"     : "ami-2360fc22",
+                "ConstraintDescription" : "input the Luna default AMI ID."
+        },
+        "InstanceType" : {
+          "Description" : "WebServer EC2 instance type",
+          "Type" : "String",
+          "Default" : "m1.medium",
+          "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m3.xlarge","m3.2xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge","hi1.4xlarge","hs1.8xlarge"],
+          "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        "MaxInstanceCount" : {
+          "Description" : "Luna Max instance count",
+          "Type" : "String",
+          "Default" : "1"
+        },
+        "HostedZone" : {
+          "Description" : "HostedZone",
+          "Type" : "String",
+          "Default" : ""
+        },
+        "AssetsDomainName" : {
+          "Description" : "AssetsDomainName",
+          "Type" : "String",
+          "Default" : ""
+        },
+        "AdminDomainName" : {
+          "Description" : "AdminDomainName",
+          "Type" : "String",
+          "Default" : ""
+        },
+        "LunaDomainName" : {
+          "Description" : "LunaDomainName",
+          "Type" : "String",
+          "Default" : ""
+        },
+        "WriteThroughput" : {
+          "Description" : "Dynamo Write Throughput",
+          "Type" : "String",
+          "Default" : "100"
+        },
+        "ReadThroughput" : {
+          "Description" : "Dynamo Read Throughput",
+          "Type" : "String",
+          "Default" : "100"
+        },
+        "TemplateBucketName" : {
+            "Type" : "String",
+                "Description" : "input the template bucket name.",
+                "Default"     : "luna-contents-bucket",
+                "ConstraintDescription" : "must be a template bucket name."
+        },
+        "RootSecurityGroup" : {
+          "Type" : "String",
+          "Description" : "input the SecurityGroup name.",
+          "Default"     : "root-security-group",
+          "ConstraintDescription" : "must be a SecurityGroup name."
+        },
+        "AggregateS3Bucket" : {
+          "Type" : "String",
+          "Description" : "input the Aggregate S3 Bucket name.",
+          "Default"     : "",
+          "ConstraintDescription" : "must be a Aggregate Bucket."
+        }
+    },
+    "Mappings": {
+        "AWSNATAMI": {
+          "us-east-1":      { "AMI": "ami-c6699baf" },
+          "us-west-2":      { "AMI": "ami-52ff7262" },
+          "us-west-1":      { "AMI": "ami-3bcc9e7e" },
+          "eu-west-1":      { "AMI": "ami-0b5b6c7f" },
+          "ap-southeast-1": { "AMI": "ami-02eb9350" },
+          "ap-southeast-2": { "AMI": "ami-ab990e91" },
+          "ap-northeast-1": { "AMI": "ami-14d86d15" },
+          "sa-east-1":      { "AMI": "ami-0439e619" }
+        },
+       "S3RegionMap" : {
+          "us-east-1"      : { "s3BucketDomain" : ".s3.amazonaws.com" },
+          "us-west-1"      : { "s3BucketDomain" : ".s3-us-west-1.amazonaws.com" },
+          "us-west-2"      : { "s3BucketDomain" : ".s3-us-west-2.amazonaws.com" },
+          "eu-west-1"      : { "s3BucketDomain" : ".s3-eu-west-1.amazonaws.com" },
+          "sa-east-1"      : { "s3BucketDomain" : ".s3-sa-east-1.amazonaws.com" },
+          "ap-northeast-1" : { "s3BucketDomain" : ".s3-ap-northeast-1.amazonaws.com" },
+          "ap-southeast-1" : { "s3BucketDomain" : ".s3-ap-southeast-1.amazonaws.com" }
+        }
+    },
+    "Resources": {
+        "LunaLoadBalancerSubnet1" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+            "VpcId" : { "Ref" : "Vpc" },
+            "AvailabilityZone" : { "Fn::Select" : [ "0", { "Fn::GetAZs" : { "Ref" : "AWS::Region" }}]},
+            "CidrBlock" : "10.0.7.0/24"
+          }
+        },
+        "LunaLoadBalancerSubnet2" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+            "VpcId" : { "Ref" : "Vpc" },
+            "AvailabilityZone" : { "Fn::Select" : [ "1", { "Fn::GetAZs" : { "Ref" : "AWS::Region" }}]},
+            "CidrBlock" : "10.0.8.0/24"
+          }
+        },
+        "LunaSubnet1" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+            "VpcId" : { "Ref" : "Vpc" },
+            "AvailabilityZone" : { "Fn::Select" : [ "0", { "Fn::GetAZs" : { "Ref" : "AWS::Region" }}]},
+            "CidrBlock" : "10.0.9.0/24",
+            "Tags" : [
+              {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+              {"Key" : "Network", "Value" : "Public" }
+            ]
+          }
+        },
+        "LunaSubnet2" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+            "VpcId" : { "Ref" : "Vpc" },
+            "AvailabilityZone" : { "Fn::Select" : [ "1", { "Fn::GetAZs" : { "Ref" : "AWS::Region" }}]},
+            "CidrBlock" : "10.0.10.0/24",
+            "Tags" : [
+              {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+              {"Key" : "Network", "Value" : "Public" }
+            ]
+          }
+        },
+        "LunaSubnet1NetworkACLAssociation": {
+          "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaSubnet1" },
+            "NetworkAclId": { "Ref": "NetworkACL" }
+          }
+        },
+        "LunaSubnet2NetworkACLAssociation": {
+          "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaSubnet2" },
+            "NetworkAclId": { "Ref": "NetworkACL" }
+          }
+        },
+        "LunaLoadBalancerSubnet1NetworkACLAssociation": {
+          "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaLoadBalancerSubnet1" },
+            "NetworkAclId": { "Ref": "NetworkACL" }
+          }
+        },
+        "LunaLoadBalancerSubnet2NetworkACLAssociation": {
+          "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaLoadBalancerSubnet2" },
+            "NetworkAclId": { "Ref": "NetworkACL" }
+          }
+        },
+        "LunaLoadBalancerRouteTable": {
+          "Type": "AWS::EC2::RouteTable",
+          "Properties": {
+            "VpcId": { "Ref": "Vpc" }
+          }
+        },
+        "LunaRouteTable": {
+          "Type": "AWS::EC2::RouteTable",
+          "Properties": {
+            "VpcId": { "Ref": "Vpc" }
+          }
+        },
+        "LunaLoadBalancerRoute": {
+          "Type": "AWS::EC2::Route",
+          "Properties": {
+            "RouteTableId": { "Ref": "LunaLoadBalancerRouteTable" },
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": { "Ref": "Igw" }
+          }
+        },
+        "LunaRoute": {
+          "Type": "AWS::EC2::Route",
+          "Properties": {
+            "RouteTableId": { "Ref": "LunaRouteTable" },
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "InstanceId": { "Ref": "NatServer" }
+          }
+        },
+
+        "LunaSubnet1RouteTableAssociation": {
+          "Type": "AWS::EC2::SubnetRouteTableAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaSubnet1" },
+            "RouteTableId": { "Ref": "LunaRouteTable" }
+          }
+        },
+        "LunaSubnet2RouteTableAssociation": {
+          "Type": "AWS::EC2::SubnetRouteTableAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaSubnet2" },
+            "RouteTableId": { "Ref": "LunaRouteTable" }
+          }
+        },
+        "LunaLoadBalancerSubnet1RouteTableAssociation": {
+          "Type": "AWS::EC2::SubnetRouteTableAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaLoadBalancerSubnet1" },
+            "RouteTableId": { "Ref": "LunaLoadBalancerRouteTable" }
+          }
+        },
+        "LunaLoadBalancerSubnet2RouteTableAssociation": {
+          "Type": "AWS::EC2::SubnetRouteTableAssociation",
+          "Properties": {
+            "SubnetId": { "Ref": "LunaLoadBalancerSubnet2" },
+            "RouteTableId": { "Ref": "LunaLoadBalancerRouteTable" }
+          }
+        },
+        "LunaLoadBalancerSecurityGroup": {
+           "Type": "AWS::EC2::SecurityGroup",
+           "Properties": {
+             "GroupDescription": "from Internet to Luna Load Balancer.",
+             "VpcId": { "Ref": "Vpc" },
+             "SecurityGroupIngress": [
+               { "IpProtocol": "tcp", "FromPort": "80",  "ToPort": "80",  "CidrIp": "0.0.0.0/0" },
+               { "IpProtocol": "tcp", "FromPort": "443", "ToPort": "443", "CidrIp": "0.0.0.0/0" }
+             ]
+           }
+        },
+        "LunaLoadBalancer": {
+          "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+          "Properties": {
+            "SecurityGroups": [{ "Ref": "LunaLoadBalancerSecurityGroup" }],
+            "Subnets":[{ "Ref" : "LunaLoadBalancerSubnet1"},{ "Ref" : "LunaLoadBalancerSubnet2"}],
+            "HealthCheck": {
+              "HealthyThreshold": "2",
+              "Interval": "30",
+              "Target": "HTTP:8080/",
+              "Timeout": "5",
+              "UnhealthyThreshold": "2"
+            },
+            "Listeners": [
+              {
+                "InstancePort": "8080",
+                "LoadBalancerPort": "80",
+                "Protocol": "HTTP",
+                "PolicyNames": [
+                ]
+              }
+            ]
+          }
+        },
+        "LunaSecurityGroup": {
+           "Type": "AWS::EC2::SecurityGroup",
+           "Properties": {
+             "GroupDescription": "from LoadBalancer to Luna.",
+             "VpcId": { "Ref": "Vpc" },
+             "SecurityGroupIngress": [
+               { "IpProtocol": "tcp",
+                 "FromPort": "8080",
+                 "ToPort": "8080",
+                 "SourceSecurityGroupId" : { "Ref" : "LunaLoadBalancerSecurityGroup" }
+               }
+             ]
+           }
+        },
+        "LunaScaleGroup" : {
+           "DependsOn" : ["LunaSubnet1RouteTableAssociation","LunaSubnet2RouteTableAssociation","LunaRoute",
+                          "LunaSubnet1NetworkACLAssociation","LunaSubnet2NetworkACLAssociation",
+                          "QueueAnswers","QueueDynamoflowctl"],
+           "Type" : "AWS::AutoScaling::AutoScalingGroup",
+           "Properties" : {
+              "AvailabilityZones" : { "Fn::GetAZs" : { "Ref" : "AWS::Region" }},
+              "LaunchConfigurationName" : { "Ref" : "LunaLaunchConfig" },
+              "MinSize" : "2",
+              "MaxSize" : { "Ref" : "MaxInstanceCount" },
+              "LoadBalancerNames" : [ { "Ref" : "LunaLoadBalancer" } ],
+              "VPCZoneIdentifier" : [{ "Ref" : "LunaSubnet1"},{ "Ref" : "LunaSubnet2"}]
+           }
+        },
+
+        "LunaLaunchConfig": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+		        "KeyName": {"Ref" : "KeyName"},
+                "ImageId": { "Ref" : "ImageId" },
+                "UserData": {
+                  "Fn::Base64" : {
+                    "Fn::Join" : [ "", [
+                      "accessKey=", { "Ref" : "AccessKey" } ,"\n",
+                      "secretKey=", { "Ref" : "SecretKey" } ,"\n",
+                      "contents.s3.bucketname=", { "Ref" : "TemplateBucketName" },"\n",
+                      "sqs.endpoint=", {"Fn::Join" : [ "", [ "sqs.", { "Ref" : "AWS::Region" }, ".amazonaws.com" ] ]},"\n",
+                      "dynamo.endpoint=", {"Fn::Join" : [ "", [ "dynamodb.", { "Ref" : "AWS::Region" }, ".amazonaws.com" ] ]},"\n",
+                      "ec2.region=", { "Ref" : "AWS::Region" } ,"\n",
+                      "ec2.securitygroup=", { "Ref" : "RootSecurityGroup" } ,"\n",
+                      "domain.assets=", { "Ref" : "AssetsDomainName" } ,"\n",
+                      "domain.luna=", { "Ref" : "LunaDomainName" } ,"\n",
+                      "s3.aggregateS3Bucket=", { "Ref" : "AggregateS3Bucket" } ,"\n",
+                      "" ]
+                    ]
+                  }
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "LunaSecurityGroup"
+                    },
+                    {
+                        "Ref": "RootSecurityGroup"
+                    }
+                ],
+               "InstanceType" : { "Ref" : "InstanceType" }
+            }
+        },
+       "LunaScaleUpPolicy" : {
+          "Type" : "AWS::AutoScaling::ScalingPolicy",
+          "Properties" : {
+            "AdjustmentType" : "ChangeInCapacity",
+            "AutoScalingGroupName" : { "Ref" : "LunaScaleGroup" },
+            "Cooldown" : "60",
+            "ScalingAdjustment" : "1"
+          }
+        },
+        "LunaScaleDownPolicy" : {
+          "Type" : "AWS::AutoScaling::ScalingPolicy",
+          "Properties" : {
+            "AdjustmentType" : "ChangeInCapacity",
+            "AutoScalingGroupName" : { "Ref" : "LunaScaleGroup" },
+            "Cooldown" : "60",
+            "ScalingAdjustment" : "-1"
+          }
+        },
+        "CPUAlarmHigh": {
+         "Type": "AWS::CloudWatch::Alarm",
+         "Properties": {
+            "AlarmDescription": "Scale-up if CPU > 80% for 5 minutes",
+            "MetricName": "CPUUtilization",
+            "Namespace": "AWS/EC2",
+            "Statistic": "Average",
+            "Period": "300",
+            "EvaluationPeriods": "1",
+            "Threshold": "80",
+            "AlarmActions": [ { "Ref": "LunaScaleUpPolicy" } ],
+            "Dimensions": [
+              {
+                "Name": "AutoScalingGroupName",
+                "Value": { "Ref": "LunaScaleGroup" }
+              }
+            ],
+            "ComparisonOperator": "GreaterThanThreshold"
+          }
+        },
+        "CPUAlarmLow": {
+         "Type": "AWS::CloudWatch::Alarm",
+         "Properties": {
+            "AlarmDescription": "Scale-down if CPU < 30% for 5 minutes",
+            "MetricName": "CPUUtilization",
+            "Namespace": "AWS/EC2",
+            "Statistic": "Average",
+            "Period": "300",
+            "EvaluationPeriods": "1",
+            "Threshold": "30",
+            "AlarmActions": [ { "Ref": "LunaScaleDownPolicy" } ],
+            "Dimensions": [
+              {
+                "Name": "AutoScalingGroupName",
+                "Value": { "Ref": "LunaScaleGroup" }
+              }
+            ],
+            "ComparisonOperator": "LessThanThreshold"
+          }
+        },
+        "DynamoUserAns" : {
+         "Type" : "AWS::DynamoDB::Table",
+          "Properties" : {
+              "KeySchema" : {
+                 "HashKeyElement": {
+                    "AttributeName" : "uid",
+                    "AttributeType" : "S"
+                 }
+              },
+              "ProvisionedThroughput" : {
+                 "ReadCapacityUnits" : {"Ref" : "ReadThroughput"},
+                 "WriteCapacityUnits" : {"Ref" : "WriteThroughput"}
+             }
+          }
+        },
+        "QueueAnswers" : {
+          "Type" : "AWS::SQS::Queue",
+          "Properties": {
+              "ReceiveMessageWaitTimeSeconds": 20
+          }
+        },
+        "QueueDynamoflowctl" : {
+          "Type" : "AWS::SQS::Queue",
+          "Properties": {
+              "ReceiveMessageWaitTimeSeconds": 20
+          }
+        }
+    },
+    "Outputs" : {
+        "LunaStack" : {
+            "Value" : { "Ref" : "AWS::StackId"}
+        },
+        "DynamoUserAns" : {
+            "Value" : { "Ref" : "DynamoUserAns"}
+        },
+        "QueueAnswers" : {
+            "Value" : { "Ref" : "QueueAnswers"}
+        },
+        "QueueAnswersName" : {
+            "Value" : { "Fn::GetAtt" : ["QueueAnswers", "QueueName"] }
+        },
+        "QueueDynamoflowctl" : {
+            "Value" : { "Ref" : "QueueDynamoflowctl"}
+        },
+        "NatServer" : {
+            "Value" : { "Ref" : "NatServer"}
+        }
+    }
+}
