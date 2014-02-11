@@ -90,6 +90,9 @@ public class AddColorFilter {
             } else if (node.getTypeName().startsWith("AWS::IAM::")) {
                 node.setColor(deploymentAndManagementColor);
 
+            } else if (node.getTypeName().startsWith("AWS::Redshift::")) {
+                node.setColor(databaseColor);
+
             } else if (node.getTypeName().startsWith("AWS::RDS::")) {
                 node.setColor(databaseColor);
 
