@@ -18,4 +18,7 @@ public class ConvertParams {
 
     @Option(name = "-pickup" , required = false , usage = "pickup regex")
     public String pickup;
+
+    @Option(name = "-validate" , required = false , usage = "call aws cloudformation validate-template")
+    public boolean awsValidate = false;
 }

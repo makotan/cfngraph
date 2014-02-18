@@ -5,8 +5,7 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 
 /**
  * User: kuroeda.makoto
@@ -24,7 +23,7 @@ public class ConvertMain {
             parser.parseArgument(args);
         } catch (CmdLineException e) {
             System.err.println(e.getMessage());
-            System.err.println("-i templatefile.template [-o outputfile.jpg] [-pickup pickupRegex]");
+            System.err.println("-i templatefile.template [-o outputfile.jpg] [-pickup pickupRegex] [-validate]");
             parser.printUsage(System.err);
             return;
         }
@@ -42,8 +41,37 @@ public class ConvertMain {
             logger.error("dot execution Interrupted" , e);
         }
         logger.info("complete {} status = {}", jpgFileName , status);
-    }
 
+        if (cp.awsValidate) {
+            ProcessBuilder vp = new ProcessBuilder();
+            vp.command("aws" , "cloudformation" , "validate-template" , "--template-body" , "file://" + cp.input.getAbsolutePath().replaceAll("\\\\" , "/") );
+            vp.redirectErrorStream(true);
+            Process p = null;
+            try {
+                p = vp.start();
+                p.waitFor();
+                printInputStream(p.getInputStream());
+                p.waitFor();
+            } catch (IOException e) {
+                logger.error("aws execution" , e);
+            } catch (InterruptedException e) {
+                logger.error("aws execution" , e);
+            }
+        }
+
+    }
+    public static void printInputStream(InputStream is) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+        try {
+            for (;;) {
+                String line = br.readLine();
+                if (line == null) break;
+                System.out.println(line);
+            }
+        } finally {
+            br.close();
+        }
+    }
     static String templateToGv(ConvertParams cp) {
         logger.debug("templateToGv");
         String inputName = cp.input.getAbsolutePath();
