@@ -81,6 +81,11 @@ public class ConvertMain {
         LoadFromTemplate loadFromTemplate = new LoadFromTemplate();
         Template template = loadFromTemplate.loadTemplate(inputName);
 
+        if (cp.removeUndefinedNode) {
+            RemoveResourcesUndefinedEdgeFilter rrge = new RemoveResourcesUndefinedEdgeFilter();
+            template = rrge.process(template);
+        }
+
         AddColorFilter colorFilter = new AddColorFilter();
         template = colorFilter.process(template);
 

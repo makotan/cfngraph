@@ -21,4 +21,7 @@ public class ConvertParams {
 
     @Option(name = "-validate" , required = false , usage = "call aws cloudformation validate-template")
     public boolean awsValidate = false;
+
+    @Option(name = "-undef" , required = false , usage = "remove undefined node")
+    public boolean removeUndefinedNode = false;
 }

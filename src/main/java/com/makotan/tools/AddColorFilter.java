@@ -12,6 +12,7 @@ import java.util.List;
 public class AddColorFilter {
     public Template process(Template template) {
         parameterColor(template.getParameters());
+        conditionColor(template.getConditions());
         mappingColor(template.getMappings());
         resourcesColor(template.getResources());
         outputColor(template.getOutputs());
@@ -19,6 +20,16 @@ public class AddColorFilter {
     }
 
     void parameterColor(List<Node> nodeList) {
+        if(nodeList == null) {
+            return;
+        }
+        for (Node node : nodeList) {
+            node.setColor(new Color(Color.LIGHT_GRAY.getRGB()));
+            edgeColor(node.getEdgeList());
+        }
+    }
+
+    void conditionColor(List<Node> nodeList) {
         if(nodeList == null) {
             return;
         }
